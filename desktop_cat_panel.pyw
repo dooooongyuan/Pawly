@@ -79,15 +79,36 @@ def save_config(payload: dict) -> None:
     CONFIG_PATH.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+def is_pid_running(pid: int | None) -> bool:
+    if pid is None or pid <= 0:
+        return False
+
+    completed = subprocess.run(
+        ["tasklist", "/FI", f"PID eq {pid}", "/NH", "/FO", "CSV"],
+        creationflags=CREATE_NO_WINDOW,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        text=True,
+        encoding="utf-8",
+        errors="ignore",
+        check=False,
+    )
+    output = completed.stdout.strip()
+    return completed.returncode == 0 and f'"{pid}"' in output
+
+
 def load_runtime_pid() -> int | None:
     if not RUNTIME_PATH.exists():
         return None
     try:
         payload = json.loads(RUNTIME_PATH.read_text(encoding="utf-8"))
         pid = int(payload["pid"])
-        return pid if pid > 0 else None
+        if is_pid_running(pid):
+            return pid
     except Exception:
-        return None
+        pass
+    clear_runtime_file()
+    return None
 
 
 def clear_runtime_file() -> None:
@@ -145,8 +166,10 @@ def stop_cat_process() -> bool:
         stderr=subprocess.DEVNULL,
         check=False,
     )
-    clear_runtime_file()
-    return completed.returncode == 0
+    if completed.returncode == 0 or not is_pid_running(pid):
+        clear_runtime_file()
+        return True
+    return False
 
 
 class DesktopCatPanel:
@@ -183,6 +206,7 @@ class DesktopCatPanel:
         self.fit_window_to_content()
         self.set_status("准备就绪")
         self.refresh_status()
+        self.root.protocol("WM_DELETE_WINDOW", self.on_close)
 
     def configure_fonts(self) -> None:
         family = "Microsoft YaHei UI"
@@ -458,6 +482,31 @@ class DesktopCatPanel:
 
     def on_open_folder(self) -> None:
         os.startfile(str(APP_DIR))
+
+    def on_close(self) -> None:
+        pid = load_runtime_pid()
+        if pid is None:
+            self.root.destroy()
+            return
+
+        result = messagebox.askyesnocancel(
+            "退出 Pawly",
+            f"检测到小猫仍在运行（PID {pid}）。\n\n"
+            "选择“是”会同时关闭小猫。\n"
+            "选择“否”只关闭面板，小猫继续运行。\n"
+            "选择“取消”返回面板。",
+            parent=self.root,
+            icon="question",
+        )
+        if result is None:
+            return
+        if result:
+            stopped = stop_cat_process()
+            if not stopped:
+                messagebox.showerror("关闭失败", "未能关闭正在运行的小猫，请先点击“关闭小猫”再退出面板。", parent=self.root)
+                self.refresh_status()
+                return
+        self.root.destroy()
 
     def refresh_status(self) -> None:
         pid = load_runtime_pid()
