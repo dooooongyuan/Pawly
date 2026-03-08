@@ -197,5 +197,6 @@ powershell -ExecutionPolicy Bypass -File .\build_windows_exes.ps1
 
 - 不需要去翻日志找设备 ID
 - 面板里显示的就是当前小猫使用的 Device ID
+- 也可以发送 `配对设备ID：你的设备ID` 给机器人，让机器人协助完成配对
 - 如果设备 ID 还没生成，面板会提示你先启动一次小猫
 - `openclaw_device_identity.json` 里也能看到同一个 `deviceId`，但不要公开整个文件，因为里面还包含私钥

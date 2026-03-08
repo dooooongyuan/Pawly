@@ -427,9 +427,14 @@ class DesktopCatPanel:
             text="如果 OpenClaw 提示 pairing-required 或 not-paired，批准这里显示的 Device ID 即可，不用翻日志。",
             style="Hint.TLabel",
         ).grid(row=9, column=0, columnspan=2, sticky="w")
+        ttk.Label(
+            form,
+            text="也可以发送“配对设备ID：这里的设备ID”给机器人，让机器人协助完成配对。",
+            style="Hint.TLabel",
+        ).grid(row=10, column=0, columnspan=2, sticky="w", pady=(4, 0))
 
         button_row = ttk.Frame(form, style="Card.TFrame")
-        button_row.grid(row=10, column=0, columnspan=2, sticky="ew", pady=(18, 0))
+        button_row.grid(row=11, column=0, columnspan=2, sticky="ew", pady=(18, 0))
         button_row.columnconfigure(0, weight=1)
         button_row.columnconfigure(1, weight=1)
 
