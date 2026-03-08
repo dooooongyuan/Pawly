@@ -2,6 +2,20 @@
 
 `Pawly` 是一个运行在 Windows 桌面的像素猫桌宠，能够接入 OpenClaw，会根据连接状态、最近会话和任务状态切换动作、表情与掉落金币效果。
 
+## 目录
+
+- [功能概览](#功能概览)
+- [项目结构](#项目结构)
+- [环境要求](#环境要求)
+- [新手推荐用法](#新手推荐用法)
+- [快速开始](#快速开始)
+  - [1. 安装依赖](#1-安装依赖)
+  - [2. 配置 OpenClaw](#2-配置-openclaw)
+  - [3. 直接运行](#3-直接运行)
+- [打包 EXE](#打包-exe)
+- [部署说明](#部署说明)
+- [OpenClaw 接入说明](#openclaw-接入说明)
+
 ## 功能概览
 
 - 右下角桌宠悬浮，支持拖拽并记住位置
@@ -27,6 +41,32 @@
 - Python 3.11 或 3.12
 - 可访问的 OpenClaw 服务，建议使用 HTTPS
 - 如果需要打包 EXE，需要安装 `PyInstaller`
+
+## 新手推荐用法
+
+如果你只是想先把桌宠跑起来，不打算改代码，推荐按下面这条路径走。
+
+### 最优启动路径
+
+1. 安装 Python 3.11 或 3.12
+2. 执行依赖安装：`python -m pip install -r requirements.txt`
+3. 执行一次打包：`powershell -ExecutionPolicy Bypass -File .\build_windows_exes.ps1`
+4. 日常使用时，直接双击 `PawlyPanel.exe`
+5. 在面板里填 OpenClaw 地址，点击“启动小猫”
+
+### 为什么推荐这样用
+
+- `PawlyPanel.exe` 更适合新手，不需要先开 CMD
+- 面板会保存你的 OpenClaw 地址和 Token 配置
+- 面板可以直接启动和关闭小猫
+- 如果你只是使用，不建议平时直接运行 `desktop_cat.py`
+
+### 最省事的日常使用
+
+首次打包完成后，后面通常只需要：
+
+1. 双击 `PawlyPanel.exe`
+2. 点击“启动小猫”
 
 ## 快速开始
 
@@ -70,13 +110,19 @@ Copy-Item .\desktop_cat_panel_config.example.json .\desktop_cat_panel_config.jso
 
 ### 3. 直接运行
 
-运行控制面板：
+推荐优先运行控制面板：
 
 ```powershell
 python .\desktop_cat_panel.pyw
 ```
 
-或者直接运行桌宠：
+或者直接运行打包后的面板：
+
+```powershell
+.\PawlyPanel.exe
+```
+
+如果你是在调试源码，也可以直接运行桌宠：
 
 ```powershell
 python .\desktop_cat.py
