@@ -48,14 +48,23 @@ Copy-Item .\desktop_cat_panel_config.example.json .\desktop_cat_panel_config.jso
 
 ```json
 {
-  "openclaw_url": "https://your-openclaw.example.com",
+  "openclaw_url": "127.0.0.1:18789",
   "openclaw_token": ""
 }
 ```
 
 说明：
 
-- `openclaw_url` 填你的 OpenClaw 面板地址，程序会自动去掉 `/overview` 之类的控制台页面后缀
+- `openclaw_url` 不是固定写法，下面几种都支持：
+  - `127.0.0.1:18789`
+  - `192.168.1.20:18789`
+  - `your-server-ip:18789`
+  - `http://127.0.0.1:18789`
+  - `https://your-openclaw.example.com`
+  - `https://your-openclaw.example.com/overview`
+- 如果没写协议，程序会自动补成 `http://`
+- 如果是 `https://`，程序会自动走 `wss://`
+- 如果地址里带了 `/overview`、`/chat` 这类控制台路径，程序会自动去掉末尾页面后缀
 - `openclaw_token` 可以先留空，首次配对成功后本地会生成认证文件
 - 如果你的 OpenClaw 需要先配对，先在 OpenClaw 网页端完成设备配对
 

@@ -349,19 +349,24 @@ class DesktopCatPanel:
 
         ttk.Label(form, text="OpenClaw 地址", style="Card.TLabel").grid(row=0, column=0, columnspan=2, sticky="w")
         self.url_entry = ttk.Entry(form, textvariable=self.openclaw_url_var, style="Modern.TEntry")
-        self.url_entry.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(8, 14))
+        self.url_entry.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(8, 6))
+        ttk.Label(
+            form,
+            text="支持示例：127.0.0.1:18789、192.168.1.20:18789、https://demo.example.com/overview",
+            style="Hint.TLabel",
+        ).grid(row=2, column=0, columnspan=2, sticky="w")
 
-        ttk.Label(form, text="OpenClaw Token（可留空）", style="Card.TLabel").grid(row=2, column=0, columnspan=2, sticky="w")
+        ttk.Label(form, text="OpenClaw Token（可留空）", style="Card.TLabel").grid(row=3, column=0, columnspan=2, sticky="w", pady=(14, 0))
         self.token_entry = ttk.Entry(form, textvariable=self.openclaw_token_var, style="Modern.TEntry", show="*")
-        self.token_entry.grid(row=3, column=0, columnspan=2, sticky="ew", pady=(8, 6))
+        self.token_entry.grid(row=4, column=0, columnspan=2, sticky="ew", pady=(8, 6))
         ttk.Label(
             form,
             text="如果地址里已经带有 token，这里可以留空。",
             style="Hint.TLabel",
-        ).grid(row=4, column=0, columnspan=2, sticky="w")
+        ).grid(row=5, column=0, columnspan=2, sticky="w")
 
         button_row = ttk.Frame(form, style="Card.TFrame")
-        button_row.grid(row=5, column=0, columnspan=2, sticky="ew", pady=(18, 0))
+        button_row.grid(row=6, column=0, columnspan=2, sticky="ew", pady=(18, 0))
         button_row.columnconfigure(0, weight=1)
         button_row.columnconfigure(1, weight=1)
 
