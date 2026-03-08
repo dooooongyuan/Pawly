@@ -15,6 +15,7 @@
 - [打包 EXE](#打包-exe)
 - [部署说明](#部署说明)
 - [OpenClaw 接入说明](#openclaw-接入说明)
+  - [设备 ID 配对流程](#设备-id-配对流程)
 
 ## 功能概览
 
@@ -180,3 +181,21 @@ powershell -ExecutionPolicy Bypass -File .\build_windows_exes.ps1
 - `openclaw_device_auth.json`
 
 这些文件包含运行状态、设备身份或认证信息，不应提交到公共仓库。
+
+### 设备 ID 配对流程
+
+如果 OpenClaw 提示 `pairing-required` 或 `not-paired`，按下面做：
+
+1. 先打开 `PawlyPanel.exe`
+2. 填好 OpenClaw 地址，然后点一次“启动小猫”
+3. 回到面板，查看“设备 ID（OpenClaw 配对用）”
+4. 点击“复制 ID”
+5. 到 OpenClaw 服务端批准这个 Device ID
+6. 再次启动或等待小猫重连
+
+说明：
+
+- 不需要去翻日志找设备 ID
+- 面板里显示的就是当前小猫使用的 Device ID
+- 如果设备 ID 还没生成，面板会提示你先启动一次小猫
+- `openclaw_device_identity.json` 里也能看到同一个 `deviceId`，但不要公开整个文件，因为里面还包含私钥

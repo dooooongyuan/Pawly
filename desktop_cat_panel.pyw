@@ -40,6 +40,7 @@ def get_app_dir() -> Path:
 APP_DIR = get_app_dir()
 CONFIG_PATH = APP_DIR / "desktop_cat_panel_config.json"
 RUNTIME_PATH = APP_DIR / "desktop_cat_runtime.json"
+DEVICE_IDENTITY_PATH = APP_DIR / "openclaw_device_identity.json"
 CAT_EXE_PATH = APP_DIR / "Pawly.exe"
 CAT_SCRIPT_PATH = APP_DIR / "desktop_cat.py"
 
@@ -114,6 +115,17 @@ def load_runtime_pid() -> int | None:
 def clear_runtime_file() -> None:
     if RUNTIME_PATH.exists():
         RUNTIME_PATH.unlink(missing_ok=True)
+
+
+def load_device_id() -> str:
+    if not DEVICE_IDENTITY_PATH.exists():
+        return ""
+    try:
+        payload = json.loads(DEVICE_IDENTITY_PATH.read_text(encoding="utf-8"))
+    except Exception:
+        return ""
+    device_id = str(payload.get("deviceId", "")).strip()
+    return device_id
 
 
 def resolve_python_command() -> list[str] | None:
@@ -197,6 +209,7 @@ class DesktopCatPanel:
         config = load_config()
         self.openclaw_url_var = tk.StringVar(value=config.get("openclaw_url", ""))
         self.openclaw_token_var = tk.StringVar(value=config.get("openclaw_token", ""))
+        self.device_id_var = tk.StringVar(value="")
         self.status_var = tk.StringVar(value="准备就绪")
         self.status_hold_until = 0.0
 
@@ -204,6 +217,7 @@ class DesktopCatPanel:
         self.configure_styles()
         self.build_ui()
         self.fit_window_to_content()
+        self.refresh_device_id()
         self.set_status("准备就绪")
         self.refresh_status()
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
@@ -394,8 +408,28 @@ class DesktopCatPanel:
             style="Hint.TLabel",
         ).grid(row=6, column=0, columnspan=2, sticky="w")
 
+        ttk.Label(form, text="设备 ID（OpenClaw 配对用）", style="Card.TLabel").grid(
+            row=7, column=0, columnspan=2, sticky="w", pady=(14, 0)
+        )
+        device_row = ttk.Frame(form, style="Card.TFrame")
+        device_row.grid(row=8, column=0, columnspan=2, sticky="ew", pady=(8, 6))
+        device_row.columnconfigure(0, weight=1)
+        self.device_id_entry = ttk.Entry(device_row, textvariable=self.device_id_var, style="Modern.TEntry")
+        self.device_id_entry.grid(row=0, column=0, sticky="ew")
+        ttk.Button(device_row, text="复制 ID", style="Secondary.TButton", command=self.on_copy_device_id).grid(
+            row=0, column=1, padx=(8, 0)
+        )
+        ttk.Button(device_row, text="刷新 ID", style="Secondary.TButton", command=self.on_refresh_device_id).grid(
+            row=0, column=2, padx=(8, 0)
+        )
+        ttk.Label(
+            form,
+            text="如果 OpenClaw 提示 pairing-required 或 not-paired，批准这里显示的 Device ID 即可，不用翻日志。",
+            style="Hint.TLabel",
+        ).grid(row=9, column=0, columnspan=2, sticky="w")
+
         button_row = ttk.Frame(form, style="Card.TFrame")
-        button_row.grid(row=7, column=0, columnspan=2, sticky="ew", pady=(18, 0))
+        button_row.grid(row=10, column=0, columnspan=2, sticky="ew", pady=(18, 0))
         button_row.columnconfigure(0, weight=1)
         button_row.columnconfigure(1, weight=1)
 
@@ -442,6 +476,38 @@ class DesktopCatPanel:
             self.status_label.configure(style=style_name)
         self.status_hold_until = time.monotonic() + hold_ms / 1000 if hold_ms > 0 else 0.0
 
+    def refresh_device_id(self) -> str:
+        device_id = load_device_id()
+        if device_id:
+            self.device_id_var.set(device_id)
+        else:
+            self.device_id_var.set("未生成（先点一次“启动小猫”）")
+        return device_id
+
+    def on_refresh_device_id(self) -> None:
+        device_id = self.refresh_device_id()
+        if device_id:
+            self.set_status("设备 ID 已刷新", tone="success", hold_ms=1200)
+        else:
+            self.set_status("还没有设备 ID，先启动一次小猫", tone="info", hold_ms=1600)
+
+    def on_copy_device_id(self) -> None:
+        device_id = self.refresh_device_id()
+        if not device_id:
+            messagebox.showinfo(
+                "设备 ID 未生成",
+                "先点击一次“启动小猫”，程序会自动生成设备身份文件。\n"
+                "如果 OpenClaw 提示 pairing-required 或 not-paired，再回来复制这里的 Device ID。",
+                parent=self.root,
+            )
+            self.set_status("还没有设备 ID，先启动一次小猫", tone="info", hold_ms=1600)
+            return
+
+        self.root.clipboard_clear()
+        self.root.clipboard_append(device_id)
+        self.root.update()
+        self.set_status("设备 ID 已复制到剪贴板", tone="success", hold_ms=1400)
+
     def on_save(self) -> None:
         payload = {
             "openclaw_url": normalize_openclaw_url(self.openclaw_url_var.get()),
@@ -470,6 +536,7 @@ class DesktopCatPanel:
             stderr=subprocess.DEVNULL,
         )
         self.set_status("小猫启动中……", tone="info", hold_ms=1200)
+        self.root.after(500, self.refresh_device_id)
         self.root.after(800, self.refresh_status)
 
     def on_stop(self) -> None:
@@ -510,6 +577,7 @@ class DesktopCatPanel:
 
     def refresh_status(self) -> None:
         pid = load_runtime_pid()
+        self.refresh_device_id()
         now = time.monotonic()
         if pid is None:
             if now >= self.status_hold_until:
