@@ -55,58 +55,80 @@ jobs:
 
       - name: Publish GitHub Release
         if: startsWith(github.ref, 'refs/tags/') || github.event.inputs.publish_release == 'true'
-        shell: pwsh
+        uses: actions/github-script@v7
         env:
-          GITHUB_TOKEN: ${{ github.token }}
-          GITHUB_REPOSITORY_NAME: ${{ github.repository }}
-          GITHUB_TAG_NAME: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || github.event.inputs.tag_name }}
-          GITHUB_TARGET_SHA: ${{ github.sha }}
-        run: |
-          if (-not $env:GITHUB_TAG_NAME) {
-              throw "tag_name is required when publishing a manual release."
-          }
+          TAG_NAME: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || github.event.inputs.tag_name }}
+          TARGET_SHA: ${{ github.sha }}
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
 
-          $headers = @{
-              Authorization = "Bearer $env:GITHUB_TOKEN"
-              Accept = "application/vnd.github+json"
-              "X-GitHub-Api-Version" = "2022-11-28"
-          }
+            const tagName = process.env.TAG_NAME;
+            if (!tagName) {
+              core.setFailed('tag_name is required when publishing a manual release.');
+              return;
+            }
 
-          $release = $null
-          try {
-              $release = Invoke-RestMethod -Headers $headers -Uri "https://api.github.com/repos/$env:GITHUB_REPOSITORY_NAME/releases/tags/$env:GITHUB_TAG_NAME" -Method GET
-          } catch {
-              $body = @{
-                  tag_name = $env:GITHUB_TAG_NAME
-                  target_commitish = $env:GITHUB_TARGET_SHA
-                  name = $env:GITHUB_TAG_NAME
-                  generate_release_notes = $true
-              } | ConvertTo-Json
-
-              $release = Invoke-RestMethod -Headers $headers -Uri "https://api.github.com/repos/$env:GITHUB_REPOSITORY_NAME/releases" -Method POST -Body $body
-          }
-
-          $uploadBase = ($release.upload_url -replace '\{\?name,label\}', '')
-          $assetPaths = @(
-              (Resolve-Path 'dist-release/Pawly-windows-x64.zip').Path,
-              (Resolve-Path 'dist-release/Pawly-windows-x64.zip.sha256').Path
-          )
-
-          foreach ($assetPath in $assetPaths) {
-              $assetName = [System.IO.Path]::GetFileName($assetPath)
-              foreach ($asset in @($release.assets)) {
-                  if ($asset.name -eq $assetName) {
-                      Invoke-RestMethod -Headers $headers -Uri "https://api.github.com/repos/$env:GITHUB_REPOSITORY_NAME/releases/assets/$($asset.id)" -Method DELETE
-                  }
+            let release;
+            try {
+              release = (
+                await github.rest.repos.getReleaseByTag({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  tag: tagName,
+                })
+              ).data;
+            } catch (error) {
+              if (error.status !== 404) {
+                throw error;
               }
 
-              $contentType = if ($assetName.EndsWith('.zip')) { 'application/zip' } else { 'text/plain' }
-              $uploadHeaders = @{
-                  Authorization = "Bearer $env:GITHUB_TOKEN"
-                  Accept = "application/vnd.github+json"
-                  "X-GitHub-Api-Version" = "2022-11-28"
-                  "Content-Type" = $contentType
+              release = (
+                await github.rest.repos.createRelease({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  tag_name: tagName,
+                  target_commitish: process.env.TARGET_SHA,
+                  name: tagName,
+                  generate_release_notes: true,
+                })
+              ).data;
+            }
+
+            const assetPaths = [
+              'dist-release/Pawly-windows-x64.zip',
+              'dist-release/Pawly-windows-x64.zip.sha256',
+            ];
+
+            const existingAssets = await github.paginate(github.rest.repos.listReleaseAssets, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              release_id: release.id,
+              per_page: 100,
+            });
+
+            for (const assetPath of assetPaths) {
+              const assetName = path.basename(assetPath);
+              const existingAsset = existingAssets.find((asset) => asset.name === assetName);
+              if (existingAsset) {
+                await github.rest.repos.deleteReleaseAsset({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  asset_id: existingAsset.id,
+                });
               }
 
-              Invoke-RestMethod -Headers $uploadHeaders -Uri "$uploadBase?name=$assetName" -Method POST -InFile $assetPath
-          }
+              const assetData = fs.readFileSync(assetPath);
+              await github.rest.repos.uploadReleaseAsset({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                release_id: release.id,
+                name: assetName,
+                headers: {
+                  'content-type': assetName.endsWith('.zip') ? 'application/zip' : 'text/plain',
+                  'content-length': assetData.length,
+                },
+                data: assetData,
+              });
+            }
