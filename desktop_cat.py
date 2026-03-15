@@ -249,8 +249,21 @@ def get_app_dir() -> Path:
     return Path(__file__).resolve().parent
 
 
+def get_resource_dir() -> Path:
+    if getattr(sys, "frozen", False):
+        meipass = getattr(sys, "_MEIPASS", "")
+        if meipass:
+            return Path(meipass).resolve()
+        return Path(sys.executable).resolve().parent
+    return Path(__file__).resolve().parent
+
+
 def app_path(name: str) -> Path:
     return get_app_dir() / name
+
+
+def resource_path(name: str) -> Path:
+    return get_resource_dir() / name
 
 
 def load_session_state(session_state_path: Path | None) -> dict[str, str]:
@@ -295,9 +308,9 @@ def save_session_state(
 
 
 def parse_args() -> argparse.Namespace:
-    default_sprite = app_path("Cat Sprite Sheet.png")
-    default_emote_dir = app_path("pipo-popupemotes Split images")
-    default_coin_dir = app_path("Coin_Gems")
+    default_sprite = resource_path("Cat Sprite Sheet.png")
+    default_emote_dir = resource_path("pipo-popupemotes Split images")
+    default_coin_dir = resource_path("Coin_Gems")
     parser = argparse.ArgumentParser(description="Pawly desktop pet for Windows")
     parser.add_argument("--sprite", type=Path, default=default_sprite)
     parser.add_argument("--emote-dir", type=Path, default=default_emote_dir)

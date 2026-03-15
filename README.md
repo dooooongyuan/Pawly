@@ -8,6 +8,7 @@
 - [项目结构](#项目结构)
 - [环境要求](#环境要求)
 - [新手推荐用法](#新手推荐用法)
+- [直接下载 Release（推荐）](#直接下载-release推荐)
 - [快速开始](#快速开始)
   - [1. 安装依赖](#1-安装依赖)
   - [2. 配置 OpenClaw](#2-配置-openclaw)
@@ -39,24 +40,25 @@
 ## 环境要求
 
 - Windows 10/11
-- Python 3.11 或 3.12
 - 可访问的 OpenClaw 服务，建议使用 HTTPS
-- 如果需要打包 EXE，需要安装 `PyInstaller`
+- 如果你是直接下载 Release 包，**不需要安装 Python**
+- 只有在你要从源码运行或自己重新打包时，才需要 Python 3.11 / 3.12 和 `PyInstaller`
 
 ## 新手推荐用法
 
-如果你只是想先把桌宠跑起来，不打算改代码，推荐按下面这条路径走。
+如果你只是想先把桌宠跑起来，不打算改代码，推荐直接下载 Release 包。
 
 ### 最优启动路径
 
-1. 安装 Python 3.11 或 3.12
-2. 执行依赖安装：`python -m pip install -r requirements.txt`
-3. 执行一次打包：`powershell -ExecutionPolicy Bypass -File .\build_windows_exes.ps1`
-4. 日常使用时，直接双击 `PawlyPanel.exe`
+1. 打开仓库的 Releases 页面
+2. 下载 `Pawly-windows-x64.zip`
+3. 解压到任意目录
+4. 双击 `PawlyPanel.exe`
 5. 在面板里填 OpenClaw 地址，点击“启动小猫”
 
 ### 为什么推荐这样用
 
+- 不需要安装 Python
 - `PawlyPanel.exe` 更适合新手，不需要先开 CMD
 - 面板会保存你的 OpenClaw 地址和 Token 配置
 - 面板可以直接启动和关闭小猫
@@ -68,6 +70,21 @@
 
 1. 双击 `PawlyPanel.exe`
 2. 点击“启动小猫”
+
+## 直接下载 Release（推荐）
+
+给普通用户的最简用法：
+
+1. 打开仓库的 [Releases](https://github.com/dooooongyuan/Pawly/releases)
+2. 下载最新的 `Pawly-windows-x64.zip`
+3. 解压后直接运行 `PawlyPanel.exe`
+
+说明：
+
+- Release 包已经包含 `Pawly.exe`、`PawlyPanel.exe` 和运行说明
+- 当前发布包按“普通用户无需 Python”设计
+- 如果 Windows 弹出 SmartScreen，可以选择“更多信息”后继续运行
+- 源码运行和自行打包只面向开发者
 
 ## 快速开始
 
@@ -142,17 +159,43 @@ powershell -ExecutionPolicy Bypass -File .\build_windows_exes.ps1
 - `Pawly.exe`
 - `PawlyPanel.exe`
 
+当前 `Pawly.exe` 会把猫动作、表情和金币资源一起打进包里。
+
+如果你要生成给别人直接下载的发布包，再执行：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\package_release.ps1
+```
+
+会额外生成：
+
+- `dist-release\Pawly-windows-x64.zip`
+- `dist-release\Pawly-windows-x64.zip.sha256`
+
 建议日常使用直接启动 `PawlyPanel.exe`。
 
 ## 部署说明
 
-如果你要部署到另一台 Windows 机器，至少带上这些文件：
+如果你要部署到另一台 Windows 机器，最省事的方式是直接带上 Release 包：
+
+- `Pawly-windows-x64.zip`
+
+首次部署流程：
+
+1. 解压 `Pawly-windows-x64.zip`
+2. 启动 `PawlyPanel.exe`
+3. 填写 OpenClaw 地址和 Token
+4. 如果 OpenClaw 提示需要配对，先在服务端确认设备配对
+5. 点击启动桌宠
+6. 桌宠会在右下角出现，并自动保存拖拽后的位置
+
+如果你是从源码目录直接拷文件，也至少需要：
 
 - `Pawly.exe`
 - `PawlyPanel.exe`
-- `Cat Sprite Sheet.png`
-- `Coin_Gems/`
-- `pipo-popupemotes Split images/`
+- `LICENSE`
+- `THIRD_PARTY_NOTICES.md`
+- `desktop_cat_panel_config.example.json`
 
 首次部署流程：
 

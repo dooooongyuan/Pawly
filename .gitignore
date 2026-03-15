@@ -8,6 +8,7 @@ venv/
 
 build/
 dist/
+dist-release/
 *.spec
 
 OpenClawCat.exe
