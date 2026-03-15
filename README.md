@@ -188,15 +188,20 @@ powershell -ExecutionPolicy Bypass -File .\build_windows_exes.ps1
 
 1. 先打开 `PawlyPanel.exe`
 2. 填好 OpenClaw 地址，然后点一次“启动小猫”
-3. 回到面板，查看“设备 ID（OpenClaw 配对用）”
-4. 点击“复制 ID”
-5. 到 OpenClaw 服务端批准这个 Device ID
-6. 再次启动或等待小猫重连
+3. 这一步的目的不是立刻连上，而是先让网关生成一个待审批请求
+4. 回到面板，查看“设备 ID（OpenClaw 配对用）”
+5. 你可以直接点击“复制配对消息”
+6. 把这条消息发给机器人：`配对设备ID：你的设备ID`
+7. 机器人端应先按 `deviceId` 查找 pending request，再批准对应的 `requestId`
+8. 再次启动或等待小猫重连
 
 说明：
 
 - 不需要去翻日志找设备 ID
 - 面板里显示的就是当前小猫使用的 Device ID
-- 也可以发送 `配对设备ID：你的设备ID` 给机器人，让机器人协助完成配对
+- 如果当前卡在配对，面板状态会直接显示“等待配对批准”
+- `deviceId` 是设备身份；真正批准时，OpenClaw 当前配的是 pending request 的 `requestId`
+- 所以机器人最优实现不是直接拿 `deviceId` approve，而是先 `devices list --json`，找到匹配项后再 approve
+- 如果当前服务端只有一个 pending request，也可以直接用 `openclaw devices approve --latest`
 - 如果设备 ID 还没生成，面板会提示你先启动一次小猫
 - `openclaw_device_identity.json` 里也能看到同一个 `deviceId`，但不要公开整个文件，因为里面还包含私钥

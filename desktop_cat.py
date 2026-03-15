@@ -824,6 +824,16 @@ class OpenClawGatewayMonitor:
         self.last_task_active = active
         self.emit({"type": "task", "active": active})
 
+    def emit_pairing(self, required: bool, message: str = "", code: str = "") -> None:
+        self.emit(
+            {
+                "type": "pairing",
+                "required": required,
+                "message": message.strip(),
+                "code": code.strip(),
+            }
+        )
+
     def send_request(self, ws: websocket.WebSocket, method: str, params: dict) -> str:
         request_id = str(uuid.uuid4())
         ws.send(json.dumps({"type": "req", "id": request_id, "method": method, "params": params}))
@@ -1058,7 +1068,11 @@ class OpenClawGatewayMonitor:
 
                 if not message.get("ok"):
                     error = message.get("error") or {}
-                    error_message = error.get("message") or error.get("code") or "request failed"
+                    error_code = str(error.get("code") or "").strip()
+                    error_message = str(error.get("message") or error_code or "request failed").strip()
+                    normalized_error = f"{error_code} {error_message}".lower()
+                    pairing_required = "pairing-required" in normalized_error or "not-paired" in normalized_error
+                    self.emit_pairing(pairing_required, error_message, error_code)
                     raise RuntimeError(str(error_message))
 
                 payload = message.get("payload") or {}
@@ -1089,6 +1103,7 @@ class OpenClawGatewayMonitor:
                             [str(scope) for scope in auth_scopes],
                         )
 
+                    self.emit_pairing(False)
                     self.emit_connection(True)
                     history_session_key = self.get_history_session_key()
                     if history_session_key:
@@ -1118,7 +1133,10 @@ class OpenClawGatewayMonitor:
             try:
                 self.connect_once()
                 backoff_seconds = 0.8
-            except Exception:
+            except Exception as exc:
+                normalized_error = str(exc).strip().lower()
+                if "pairing-required" not in normalized_error and "not-paired" not in normalized_error:
+                    self.emit_pairing(False)
                 self.emit_connection(False)
                 self.emit_task(False)
             if self.stop_event.wait(backoff_seconds):
@@ -1163,6 +1181,8 @@ class DesktopCat:
         self.current_emote_visible = True
         self.connection_state = False
         self.task_active = False
+        self.pairing_required = False
+        self.pairing_error = ""
         self.wakeup_after_connect = False
         self.animation_after_id: str | None = None
         self.transition_after_id: str | None = None
@@ -1260,7 +1280,11 @@ class DesktopCat:
     def write_runtime_state(self) -> None:
         if self.config.runtime_path is None:
             return
-        payload = {"pid": os.getpid()}
+        payload = {
+            "pid": os.getpid(),
+            "pairingRequired": self.pairing_required,
+            "pairingError": self.pairing_error,
+        }
         self.config.runtime_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
     def clear_runtime_state(self) -> None:
@@ -1386,6 +1410,12 @@ class DesktopCat:
                 if connected != self.connection_state:
                     self.apply_connection_state(connected)
                 continue
+            if update_type == "pairing":
+                self.apply_pairing_state(
+                    bool(update.get("required")),
+                    str(update.get("message") or "").strip(),
+                )
+                continue
             if update_type == "task":
                 active = bool(update.get("active"))
                 if active != self.task_active:
@@ -1395,7 +1425,11 @@ class DesktopCat:
 
     def apply_connection_state(self, connected: bool) -> None:
         self.connection_state = connected
+        if connected:
+            self.pairing_required = False
+            self.pairing_error = ""
         self.set_emote_state(connected)
+        self.write_runtime_state()
         if connected:
             self.wakeup_after_connect = False
             if self.task_active:
@@ -1428,6 +1462,11 @@ class DesktopCat:
             self.choose_next_action()
             self.tick_animation()
             self.show_temporary_emote("task_complete", self.config.task_complete_emote_duration_ms)
+
+    def apply_pairing_state(self, required: bool, message: str = "") -> None:
+        self.pairing_required = required
+        self.pairing_error = message if required else ""
+        self.write_runtime_state()
 
     def cancel_animation_callbacks(self) -> None:
         for callback_id_attr in ("animation_after_id", "transition_after_id"):

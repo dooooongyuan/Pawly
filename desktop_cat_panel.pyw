@@ -112,6 +112,16 @@ def load_runtime_pid() -> int | None:
     return None
 
 
+def load_runtime_state() -> dict:
+    if not RUNTIME_PATH.exists():
+        return {}
+    try:
+        payload = json.loads(RUNTIME_PATH.read_text(encoding="utf-8"))
+        return payload if isinstance(payload, dict) else {}
+    except Exception:
+        return {}
+
+
 def clear_runtime_file() -> None:
     if RUNTIME_PATH.exists():
         RUNTIME_PATH.unlink(missing_ok=True)
@@ -419,17 +429,20 @@ class DesktopCatPanel:
         ttk.Button(device_row, text="复制 ID", style="Secondary.TButton", command=self.on_copy_device_id).grid(
             row=0, column=1, padx=(8, 0)
         )
-        ttk.Button(device_row, text="刷新 ID", style="Secondary.TButton", command=self.on_refresh_device_id).grid(
+        ttk.Button(device_row, text="复制配对消息", style="Secondary.TButton", command=self.on_copy_pairing_message).grid(
             row=0, column=2, padx=(8, 0)
+        )
+        ttk.Button(device_row, text="刷新", style="Secondary.TButton", command=self.on_refresh_device_id).grid(
+            row=0, column=3, padx=(8, 0)
         )
         ttk.Label(
             form,
-            text="如果 OpenClaw 提示 pairing-required 或 not-paired，批准这里显示的 Device ID 即可，不用翻日志。",
+            text="先点一次“启动小猫”，让网关生成待审批请求；如果 OpenClaw 提示 pairing-required 或 not-paired，再处理配对。",
             style="Hint.TLabel",
         ).grid(row=9, column=0, columnspan=2, sticky="w")
         ttk.Label(
             form,
-            text="也可以发送“配对设备ID：这里的设备ID”给机器人，让机器人协助完成配对。",
+            text="建议发送“配对设备ID：这里的设备ID”给机器人；机器人端应先按 deviceId 查 pending request，再 approve 对应 requestId。",
             style="Hint.TLabel",
         ).grid(row=10, column=0, columnspan=2, sticky="w", pady=(4, 0))
 
@@ -513,6 +526,24 @@ class DesktopCatPanel:
         self.root.update()
         self.set_status("设备 ID 已复制到剪贴板", tone="success", hold_ms=1400)
 
+    def on_copy_pairing_message(self) -> None:
+        device_id = self.refresh_device_id()
+        if not device_id:
+            messagebox.showinfo(
+                "配对消息未生成",
+                "先点击一次“启动小猫”，让网关生成待审批请求。\n"
+                "然后再回来复制配对消息发给机器人。",
+                parent=self.root,
+            )
+            self.set_status("先启动一次小猫，再复制配对消息", tone="info", hold_ms=1800)
+            return
+
+        pairing_message = f"配对设备ID：{device_id}"
+        self.root.clipboard_clear()
+        self.root.clipboard_append(pairing_message)
+        self.root.update()
+        self.set_status("配对消息已复制到剪贴板", tone="success", hold_ms=1400)
+
     def on_save(self) -> None:
         payload = {
             "openclaw_url": normalize_openclaw_url(self.openclaw_url_var.get()),
@@ -581,12 +612,22 @@ class DesktopCatPanel:
         self.root.destroy()
 
     def refresh_status(self) -> None:
+        runtime_state = load_runtime_state()
         pid = load_runtime_pid()
+        pairing_required = bool(runtime_state.get("pairingRequired"))
+        pairing_error = str(runtime_state.get("pairingError", "")).strip()
         self.refresh_device_id()
         now = time.monotonic()
         if pid is None:
             if now >= self.status_hold_until:
                 self.set_status("未运行", tone="info")
+        elif pairing_required:
+            self.set_status(
+                "等待配对批准：先点一次启动小猫，再复制配对消息发给机器人",
+                tone="danger",
+            )
+        elif pairing_error:
+            self.set_status(f"运行中（连接异常：{pairing_error}）", tone="danger")
         else:
             self.set_status(f"运行中（PID {pid}）", tone="success")
         self.root.after(1500, self.refresh_status)
