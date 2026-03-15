@@ -128,6 +128,7 @@ class PetConfig:
     task_pounce_recover_ms: int = 180
     connection_poll_ms: int = 3000
     connection_timeout_ms: int = 1200
+    session_poll_ms: int = 1200
     coin_tick_ms: int = 60
     coin_frame_delay_ms: int = 120
     coin_spawn_min_ms: int = 1300
@@ -793,6 +794,50 @@ def extract_message_role(message: object) -> str:
     return role.strip().lower() if isinstance(role, str) else ""
 
 
+def extract_sessions_from_payload(payload: object) -> list[dict]:
+    if not isinstance(payload, dict):
+        return []
+
+    sessions = payload.get("sessions")
+    if isinstance(sessions, list):
+        return [session for session in sessions if isinstance(session, dict)]
+
+    entries = payload.get("entries")
+    if isinstance(entries, list):
+        return [entry for entry in entries if isinstance(entry, dict)]
+
+    return []
+
+
+def extract_session_updated_at(session: object) -> int:
+    if not isinstance(session, dict):
+        return 0
+    updated_at = session.get("updatedAt")
+    if isinstance(updated_at, (int, float)):
+        return int(updated_at)
+    return 0
+
+
+def is_relevant_auto_session(session: object) -> bool:
+    if not isinstance(session, dict):
+        return False
+
+    key = str(session.get("key", "")).strip()
+    if not key:
+        return False
+
+    display_name = str(session.get("displayName", "")).strip().lower()
+    if display_name == "heartbeat":
+        return False
+
+    origin = session.get("origin")
+    origin_provider = str(origin.get("provider", "")).strip().lower() if isinstance(origin, dict) else ""
+    if origin_provider == "heartbeat":
+        return False
+
+    return ":heartbeat" not in key.lower()
+
+
 class OpenClawGatewayMonitor:
     def __init__(
         self,
@@ -922,6 +967,22 @@ class OpenClawGatewayMonitor:
             return ""
         return session_key
 
+    def pick_recent_auto_session(self, payload: object, task_active: bool) -> tuple[str, int]:
+        sessions = [session for session in extract_sessions_from_payload(payload) if is_relevant_auto_session(session)]
+        if not sessions:
+            return "", 0
+
+        sessions.sort(key=extract_session_updated_at, reverse=True)
+
+        if task_active and self.active_session_key:
+            for session in sessions:
+                session_key = str(session.get("key", "")).strip()
+                if session_key == self.active_session_key:
+                    return session_key, extract_session_updated_at(session)
+
+        session = sessions[0]
+        return str(session.get("key", "")).strip(), extract_session_updated_at(session)
+
     def process_chat_event(self, payload: dict, task_active: bool) -> bool:
         if not isinstance(payload, dict):
             return task_active
@@ -1001,6 +1062,10 @@ class OpenClawGatewayMonitor:
         connect_deadline = time.monotonic() + 0.75
         pending_requests: dict[str, str] = {}
         history_probe_cooldowns: dict[str, float] = {}
+        session_history_versions: dict[str, int] = {}
+        sessions_request_pending = False
+        next_sessions_poll_at = 0.0
+        connection_ready = False
         task_active = False
         identity: dict[str, str | int] | None = None
 
@@ -1019,6 +1084,26 @@ class OpenClawGatewayMonitor:
                     request_id = self.send_request(ws, "connect", payload)
                     pending_requests[request_id] = "connect"
                     connect_sent = True
+
+                if (
+                    connection_ready
+                    and self.auto_session_mode
+                    and not sessions_request_pending
+                    and time.monotonic() >= next_sessions_poll_at
+                ):
+                    sessions_request_id = self.send_request(
+                        ws,
+                        "sessions.list",
+                        {
+                            "activeMinutes": 1440,
+                            "limit": 24,
+                            "includeGlobal": True,
+                            "includeUnknown": True,
+                        },
+                    )
+                    pending_requests[sessions_request_id] = "sessions"
+                    sessions_request_pending = True
+                    next_sessions_poll_at = time.monotonic() + self.config.session_poll_ms / 1000
 
                 try:
                     raw_message = ws.recv()
@@ -1079,14 +1164,19 @@ class OpenClawGatewayMonitor:
                 if not request_kind:
                     continue
 
+                if request_kind == "sessions":
+                    sessions_request_pending = False
+
                 if not message.get("ok"):
                     error = message.get("error") or {}
                     error_code = str(error.get("code") or "").strip()
                     error_message = str(error.get("message") or error_code or "request failed").strip()
                     normalized_error = f"{error_code} {error_message}".lower()
                     pairing_required = "pairing-required" in normalized_error or "not-paired" in normalized_error
-                    self.emit_pairing(pairing_required, error_message, error_code)
-                    raise RuntimeError(str(error_message))
+                    if request_kind == "connect":
+                        self.emit_pairing(pairing_required, error_message, error_code)
+                        raise RuntimeError(str(error_message))
+                    continue
 
                 payload = message.get("payload") or {}
                 if request_kind == "connect":
@@ -1118,12 +1208,45 @@ class OpenClawGatewayMonitor:
 
                     self.emit_pairing(False)
                     self.emit_connection(True)
+                    connection_ready = True
+                    if self.auto_session_mode:
+                        sessions_request_id = self.send_request(
+                            ws,
+                            "sessions.list",
+                            {
+                                "activeMinutes": 1440,
+                                "limit": 24,
+                                "includeGlobal": True,
+                                "includeUnknown": True,
+                            },
+                        )
+                        pending_requests[sessions_request_id] = "sessions"
+                        sessions_request_pending = True
+                        next_sessions_poll_at = time.monotonic() + self.config.session_poll_ms / 1000
                     history_session_key = self.get_history_session_key()
                     if history_session_key:
                         history_request_id = self.send_request(ws, "chat.history", {"sessionKey": history_session_key, "limit": 60})
                         pending_requests[history_request_id] = f"history:{history_session_key}"
                     else:
                         self.emit_task(False)
+                    continue
+
+                if request_kind == "sessions":
+                    recent_session_key, recent_session_updated_at = self.pick_recent_auto_session(payload, task_active)
+                    if not recent_session_key:
+                        continue
+
+                    known_version = session_history_versions.get(recent_session_key, -1)
+                    if recent_session_updated_at <= known_version and recent_session_key == self.recent_session_key:
+                        continue
+
+                    session_history_versions[recent_session_key] = recent_session_updated_at
+                    history_request_id = self.send_request(
+                        ws,
+                        "chat.history",
+                        {"sessionKey": recent_session_key, "limit": 12},
+                    )
+                    pending_requests[history_request_id] = f"history:{recent_session_key}"
                     continue
 
                 if request_kind.startswith("history:"):

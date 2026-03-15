@@ -442,7 +442,7 @@ class DesktopCatPanel:
         ).grid(row=9, column=0, columnspan=2, sticky="w")
         ttk.Label(
             form,
-            text="建议发送“配对设备ID：这里的设备ID”给机器人；机器人端应先按 deviceId 查 pending request，再 approve 对应 requestId。",
+            text="建议把配对消息发给机器人；机器人端应先把 deviceId 映射到 pending requestId，再批准对应 requestId。",
             style="Hint.TLabel",
         ).grid(row=10, column=0, columnspan=2, sticky="w", pady=(4, 0))
 
@@ -538,7 +538,10 @@ class DesktopCatPanel:
             self.set_status("先启动一次小猫，再复制配对消息", tone="info", hold_ms=1800)
             return
 
-        pairing_message = f"配对设备ID：{device_id}"
+        pairing_message = (
+            f"配对设备ID：{device_id}\n"
+            "机器人端请先把 deviceId 映射到 pending requestId，再批准对应 requestId。"
+        )
         self.root.clipboard_clear()
         self.root.clipboard_append(pairing_message)
         self.root.update()

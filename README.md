@@ -234,8 +234,8 @@ powershell -ExecutionPolicy Bypass -File .\package_release.ps1
 3. 这一步的目的不是立刻连上，而是先让网关生成一个待审批请求
 4. 回到面板，查看“设备 ID（OpenClaw 配对用）”
 5. 你可以直接点击“复制配对消息”
-6. 把这条消息发给机器人：`配对设备ID：你的设备ID`
-7. 机器人端应先按 `deviceId` 查找 pending request，再批准对应的 `requestId`
+6. 复制内容第一行会是：`配对设备ID：你的设备ID`
+7. 同一条消息里会附带说明：机器人端应先把 `deviceId` 映射到 pending `requestId`，再批准对应的 `requestId`
 8. 再次启动或等待小猫重连
 
 说明：
